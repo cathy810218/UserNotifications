@@ -34,15 +34,14 @@ extension NotificationViewController : UNNotificationContentExtension {
     
     func didReceive(_ notification: UNNotification) {
         let content = notification.request.content
-        self.label?.text = content.body
-        
         if let attachment = content.attachments.first {
             if attachment.url.startAccessingSecurityScopedResource() {
-                DispatchQueue.main.async {
-                    self.imageView.image = UIImage(contentsOfFile: attachment.url.path)
-                    attachment.url.stopAccessingSecurityScopedResource()
+                if let imageData = try? Data(contentsOf: attachment.url) {
+                    let image = UIImage(data: imageData as Data)
+                    imageView.image = image
                 }
-            }  
+                attachment.url.stopAccessingSecurityScopedResource()
+            }
         }
     }
 //    func didReceive(_ response: UNNotificationResponse,

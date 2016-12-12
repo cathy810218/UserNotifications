@@ -30,45 +30,59 @@ class NotificationService: UNNotificationServiceExtension {
 
     var contentHandler: ((UNNotificationContent) -> Void)?
     var bestAttemptContent: UNMutableNotificationContent?
-    
+
     override func didReceive(_ request: UNNotificationRequest,
                              withContentHandler contentHandler:@escaping (UNNotificationContent) -> Void) {
         
         self.contentHandler = contentHandler
         bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
         
-        let fmURL: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.cardinalblue.com.app.series")
-        var attachement: UNNotificationAttachment? = nil
-        
-        //  use semaphore convert async download to sync
-        let semaphore = DispatchSemaphore(value: 0)
-        if let imageURLString = bestAttemptContent?.userInfo["attachment"] as? String {
-            let url = URL(string: imageURLString)!
-            let localURL = fmURL?.appendingPathComponent(url.lastPathComponent)
-            URLSession.downloadImage(atURL: url, withCompletionHandler: { (data, error) in
-                if (error == nil) {
-                    // wrtie to app group
-                    try? data?.write(to: localURL!)
-                    
-                    // create attachment
-                    attachement = try! UNNotificationAttachment(identifier: "attachment", url: localURL!, options: nil)
-                    semaphore.signal()
-                }
-            })
+        func failEarly() {
+            contentHandler(request.content)
         }
-        semaphore.wait()
-    
-        //  success set attachments
-        if let bestAttemptContent = bestAttemptContent {
-            bestAttemptContent.attachments = [attachement!]
-            contentHandler(bestAttemptContent)
+        
+        guard let content = (request.content.mutableCopy() as? UNMutableNotificationContent) else {
+            return failEarly()
+        }
+        
+        guard let attachmentURL = content.userInfo["attachment"] as? String else {
+            return failEarly()
         }
 
+        guard let imageData = try? Data(contentsOf: URL(string: attachmentURL)!) else {
+            return failEarly()
+        }
+        guard let attachment = UNNotificationAttachment.create(imageFileIdentifier: "image.jpg", data: imageData, options: nil) else {
+            return failEarly()
+        }
+        
+        content.attachments = [attachment]
+        contentHandler(content.copy() as! UNNotificationContent)
     }
-    
+
     override func serviceExtensionTimeWillExpire() {
         if let contentHandler = contentHandler, let bestAttemptContent =  bestAttemptContent {
             contentHandler(bestAttemptContent)
         }
+    }
+}
+
+extension UNNotificationAttachment {
+    /// Save the image to disk
+    static func create(imageFileIdentifier: String, data: Data, options: [NSObject : AnyObject]?) ->UNNotificationAttachment? {
+        let fileManager = FileManager.default
+        let tmpSubFolderName = "notification"
+        let tmpSubFolderURL =
+            URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(tmpSubFolderName, isDirectory: true)
+        do {
+            try fileManager.createDirectory(at: tmpSubFolderURL, withIntermediateDirectories: true, attributes: nil)
+            let fileURL = tmpSubFolderURL.appendingPathComponent(imageFileIdentifier)
+            try data.write(to: fileURL, options: [])
+            let attachment = try UNNotificationAttachment(identifier: imageFileIdentifier, url: fileURL, options: options)
+            return attachment
+        } catch let error {
+            print("error \(error)")
+        }
+        return nil
     }
 }
