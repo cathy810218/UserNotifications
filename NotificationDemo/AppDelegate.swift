@@ -31,11 +31,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 
+extension Data {
+    var hexString: String {
+        return map { String(format: "%02.2hhx", arguments: [$0]) }.joined()
+    }
+}
+
 extension AppDelegate {
     
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        
+        print("device token \(deviceToken.hexString)")
         print("device token = " + deviceToken.description.replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: "").replacingOccurrences(of: " ", with: ""))
     }
     
